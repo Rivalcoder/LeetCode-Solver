@@ -73,11 +73,16 @@ export default function SolutionDisplay({ data, onReset }: { data: SolutionData,
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
                 >
-                    {activeTab === 'visual' && (
+                    {activeTab === 'visual' && data.visualFlow && (
                         <Visualizer
                             mermaidChart={data.visualFlow.mermaidChart}
                             steps={data.visualFlow.steps}
                         />
+                    )}
+                    {activeTab === 'visual' && !data.visualFlow && (
+                        <div className="flex flex-col items-center justify-center p-12 text-white/40">
+                            <p>Visual flow not available for this solution.</p>
+                        </div>
                     )}
 
                     {activeTab === 'optimized' && (

@@ -38,8 +38,8 @@ export interface SolutionData {
   };
 }
 
-export async function getProblemSolution(apiKey: string, query: string): Promise<SolutionData> {
-  if (!apiKey) throw new Error("API Key is required");
+export async function getProblemSolution(apiKey: string, query: string): Promise<{ data: SolutionData | null, error: string | null }> {
+  if (!apiKey) return { data: null, error: "API Key is required" };
 
   const genAI = new GoogleGenerativeAI(apiKey);
   // Using gemini-1.5-flash for speed and JSON capability
@@ -51,10 +51,10 @@ export async function getProblemSolution(apiKey: string, query: string): Promise
   const prompt = `
     You are an expert algorithm visualization tutor. The user wants to understand the LeetCode problem or algorithm: "${query}".
     Provide a detailed breakdown including Brute Force and Optimized solutions.
-
-  CRITICAL: Create a "visual flow" explanation using Mermaid.js graph syntax.
-  
-  IMPORTANT: Ensure your solution handles edge cases robustly.
+    
+    CRITICAL: Create a "visual flow" explanation using Mermaid.js graph syntax.
+    
+    IMPORTANT: Ensure your solution handles edge cases robustly.
 
     RULES FOR CONTENT:
     1. "approach": Must be a Markdown string using bullet points. 
@@ -72,53 +72,55 @@ export async function getProblemSolution(apiKey: string, query: string): Promise
     
     RULES FOR MERMAID:
       1. Use "graph TD"
-  2. KEY REQUIREMENT: You MUST enclose ALL node labels in double quotes. 
-  3. Do NOT use brackets[] or parentheses() inside the label text unless they are inside the quotes.
-    4. Keep the diagram simple and linear.
+      2. KEY REQUIREMENT: You MUST enclose ALL node labels in double quotes. 
+      3. Do NOT use brackets[] or parentheses() inside the label text unless they are inside the quotes.
+      4. Keep the diagram simple and linear.
     
     Return a strictly valid JSON object with this structure:
-  {
-    "title": "Title of the problem",
+    {
+      "title": "Title of the problem",
       "difficulty": "Easy | Medium | Hard",
-        "description": "Short description of the problem",
-          "bruteForce": {
-      "approach": "Markdown bullet points explanation",
+      "description": "Short description of the problem",
+      "bruteForce": {
+        "approach": "Markdown bullet points explanation",
         "code": {
             "java": "...",
             "python": "...",
             "cpp": "...",
             "javascript": "..."
         },
-          "timeComplexity": "O(...) - Explanation",
-            "spaceComplexity": "O(...) - Explanation"
-    },
-    "optimized": {
-      "approach": "Markdown bullet points explanation",
+        "timeComplexity": "O(...) - Explanation",
+        "spaceComplexity": "O(...) - Explanation"
+      },
+      "optimized": {
+        "approach": "Markdown bullet points explanation",
         "code": {
             "java": "...",
             "python": "...",
             "cpp": "...",
             "javascript": "..."
         },
-          "timeComplexity": "O(...) - Explanation",
-            "spaceComplexity": "O(...) - Explanation"
-    },
-    "visualFlow": {
-      "mermaidChart": "graph TD;\n  A[\"Start\"] --> B[\"Init i = 0\"];\n  B --> C{\"i < n?\"};\n  C -- Yes --> D[\"Print i\"];\n  C -- No --> E[\"End\"];",
+        "timeComplexity": "O(...) - Explanation",
+        "spaceComplexity": "O(...) - Explanation"
+      },
+      "visualFlow": {
+        "mermaidChart": "graph TD;\n  A[\"Start\"] --> B[\"Init i = 0\"];\n  B --> C{\"i < n?\"};\n  C -- Yes --> D[\"Print i\"];\n  C -- No --> E[\"End\"];",
         "steps": [
           { "text": "Step 1: Initialize ...", "highlight": "initialization", "codeSnippet": "let i = 0;" },
           { "text": "Step 2: Loop condition...", "highlight": "loop", "codeSnippet": "while (i < n)" }
         ]
+      }
     }
-  }
   `;
 
   try {
     const result = await model.generateContent(prompt);
     const text = result.response.text();
-    return JSON.parse(text) as SolutionData;
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw new Error("Failed to generate solution. Check API Key or Quota.");
+    const data = JSON.parse(text) as SolutionData;
+    return { data, error: null };
+  } catch (error: any) {
+    // Return error instead of throwing to avoid unhandled runtime errors in console
+    const errorMessage = error.message || "Unknown error";
+    return { data: null, error: errorMessage };
   }
 }

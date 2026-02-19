@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ApiKeyInput from "@/components/ApiKeyInput";
 import ProblemInput from "@/components/ProblemInput";
 import SolutionDisplay from "@/components/SolutionDisplay";
+import QuotaModal from "@/components/QuotaModal"; // Import the modal
 import { getProblemSolution, SolutionData } from "@/lib/gemini";
 import { AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,25 +13,63 @@ export default function Home() {
   const [solution, setSolution] = useState<SolutionData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showQuotaModal, setShowQuotaModal] = useState(false); // State for the modal
+  const [modalTitle, setModalTitle] = useState("API Quota Exceeded");
+
+  // Load API Key from Local Storage on Mount
+  useEffect(() => {
+    const storedKey = localStorage.getItem("gemini_api_key");
+    if (storedKey) {
+      setApiKey(storedKey);
+    }
+  }, []);
+
+  const saveApiKey = (key: string) => {
+    localStorage.setItem("gemini_api_key", key);
+    setApiKey(key);
+    setShowQuotaModal(false); // Close modal if open
+    setError(null); // Clear any existing errors
+    setModalTitle("API Quota Exceeded"); // Reset title
+  };
 
   const handleSearch = async (query: string) => {
     if (!apiKey) return;
     setLoading(true);
     setError(null);
-    try {
-      const data = await getProblemSolution(apiKey, query);
-      setSolution(data);
-    } catch (err: any) {
-      console.error("Full Gemini Error:", err);
-      // Check for 429 or quota related messages
-      if (err.message.includes("429") || err.message.toLowerCase().includes("quota") || err.message.includes("403")) {
-        setError("Quota Limit Reached. Google's Free Tier has rate limits (15 RPM). Please change your API Key or wait a moment.");
+
+    // No try-catch needed as getProblemSolution returns error object
+    const result = await getProblemSolution(apiKey, query);
+    const data = result.data;
+    const apiError = result.error;
+
+    if (apiError) {
+      console.log("Gemini API Error:", apiError);
+      const msg = apiError.toLowerCase();
+
+      // Check for 429 (Too Many Requests), Quota, 403 (Forbidden), or 400 (Bad Request - Invalid Key)
+      if (
+        msg.includes("429") ||
+        msg.includes("quota") ||
+        msg.includes("403") ||
+        msg.includes("400") ||
+        msg.includes("api key not valid")
+      ) {
+        if (msg.includes("400") || msg.includes("api key not valid")) {
+          setError("Invalid API Key provided. Please check your key.");
+          setModalTitle("Invalid API Key");
+        } else {
+          setError("Quota Limit Reached. Please update your API Key.");
+          setModalTitle("API Quota Exceeded");
+        }
+        setShowQuotaModal(true); // Open the modal
       } else {
-        setError(err.message || "Engine Error: Check your API Key and Network.");
+        setError(apiError || "Engine Error: Check your API Key and Network.");
       }
-    } finally {
-      setLoading(false);
+    } else if (data) {
+      setSolution(data);
     }
+
+    setLoading(false);
   };
 
   const reset = () => {
@@ -39,12 +78,23 @@ export default function Home() {
   };
 
   const clearKey = () => {
+    localStorage.removeItem("gemini_api_key");
     setApiKey(null);
+    setSolution(null);
     setError(null);
   }
 
   return (
     <main className="min-h-screen relative bg-black text-white overflow-x-hidden selection:bg-indigo-500/30">
+
+      {/* Quota Exceeded Modal */}
+      <QuotaModal
+        isOpen={showQuotaModal}
+        onClose={() => setShowQuotaModal(false)}
+        onUpdateKey={saveApiKey}
+        errorMessage={error || undefined}
+        title={modalTitle}
+      />
 
       <AnimatePresence mode="wait">
         {!apiKey ? (
@@ -54,7 +104,7 @@ export default function Home() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <ApiKeyInput onSave={setApiKey} />
+            <ApiKeyInput onSave={saveApiKey} />
           </motion.div>
         ) : solution ? (
           <motion.div
